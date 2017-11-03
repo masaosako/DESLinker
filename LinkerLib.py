@@ -239,7 +239,8 @@ class Triplet:
         if(self.chiSq == -1):
             self.setOrbit()
             self.chiSq = self.orbit.chisq 
-        return self.orbit.chisq
+        #return self.orbit.chisq
+        return self.chiSq
     #predicts the position of the triplet at a future date
     '''
     input: date in the format MJD
