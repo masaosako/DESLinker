@@ -158,7 +158,13 @@ def removeDuplicates(nlets):
         unique[tuple([x.objid for x in nlet.dets])] = nlet
     return unique.values()
         
-
+def removeSameExposure(nlets):
+    removed = []
+    for nlet in nlets:
+        expnum = [x.expnum for x in nlet.dets]
+        if len(set(expnum)) == len(expnum):
+            removed.append(nlet)
+    return removed
 
 
 # checks for good orbit using semi-major axis, eccentricity, chisq
@@ -202,6 +208,10 @@ def main():
     # remove duplicates
     nPlusOne = removeDuplicates(nPlusOne)
     unchanged = removeDuplicates(unchanged)
+
+    # remove same exposure
+    nPlusOne = removeSameExposure(nPlusOne)
+    unchanged = removeSameExposure(unchanged)
 
     # check for good orbits
     print('Orbit fit test in progress')
