@@ -106,11 +106,11 @@ def rmNonVariables(detDF, varDF, distThresh = 0.000027778):
 
 def main():
     args = argparse.ArgumentParser()
-    args.add_argument('detections', nargs=1, help='path to csv detection file; ' + 
+    args.add_argument('detections', nargs=1, help='path/filename of csv detection file; ' + 
                         'filename has format SNOBS_SEASON###_ML0#.csv')
     args.add_argument('variables', nargs=1, help='path to csv file of variable stars')
     args.add_argument('distThresh', nargs='?', default='0.00027778', 
-                help='maximum distance to be considered same object')
+                help='maximum distance to be considered same object (in degrees)')
     args = args.parse_args()
     savename = args.detections[0].split('+')[-1].split('/')[-1].split('.')[0]
     detDF = pd.read_csv(args.detections[0])

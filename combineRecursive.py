@@ -12,8 +12,10 @@ def main():
     parser.add_argument('chisq', nargs='?', default = 5,
                             help='chisq threshold for good orbit')
     args = parser.parse_args()
-    
+ 
+    print("Loading pickle file")   
     nlets = pickle.load(open(args.nlets[0], 'rb'))
+    print("Done loading")
     savename = args.nlets[0].split('+')[-1].split('.')[0]
     
     print('Recursively merging...')
@@ -24,7 +26,7 @@ def main():
         print('Processing ' + str(len(nlets)) + ' ' + str(numdet) +'-lets')
         minRA, maxRA, minDec, maxDec = getBounds(nlets)
         arr = partition(nlets, minRA, maxRA, minDec, maxDec, 700, 700)
-        nPlusOne, unchanged = combine(arr, numdet)
+        nPlusOne, unchanged = combine(arr, numdet, True)
         
         # remove duplicates
         nPlusOne = removeDuplicates(nPlusOne)
@@ -34,9 +36,11 @@ def main():
         nPlusOne = removeSameExposure(nPlusOne)
         unchange = removeSameExposure(unchanged)
 
+        print("\nChecking good orbits for " + str(len(nPlusOne)) + " n+1 lets")
         # check for good orbits
-        nPlusOne = checkGoodOrbit(nPlusOne, float(args.chisq))
-        unchanged = checkGoodOrbit(unchanged, float(args.chisq))
+        nPlusOne = checkGoodOrbit(nPlusOne, float(args.chisq),progress=True)
+        print("Checking good orbits for " + str(len(unchanged)) + " nlets")
+        unchanged = checkGoodOrbit(unchanged, float(args.chisq), progress=True)
 
         num_u = len(unchanged)
 

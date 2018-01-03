@@ -23,7 +23,7 @@ output: goodList, a list of triplets that satisfy orbits
             are the same fake for fakes
 '''
 def potentialTriplets(args):#, queue):
-    triplets, queue = args
+    triplets, queue= args
     #queue is 0 if no multiprocessing
     size = len(triplets)
     counter = 0
@@ -38,9 +38,11 @@ def potentialTriplets(args):#, queue):
             #printPercentage(counter, size, time.time()-time0)
 
         elements, errs = trip.calcOrbit()
+        #chisq = trip.getChiSq()
         #orbit is a swigpy object that can't be saved for some reason
         trip.orbit = 0
         if(elements['a'] > 2 and elements['e'] < 1):
+        #if chisq < threshold:
             goodList.append(trip)
         else:
             # already missing quite a lot before this stage
@@ -112,6 +114,8 @@ def main():
     args.add_argument('triplets', nargs=1,
                         help='path to pickle file; file has format ' + 
                         'chunk###+SNOBS_SEASON###_ML0#.pickle')
+    #args.add_argument('chisq', nargs='?', default=5,
+    #                    help='chisq threshold to be considered a good triplet')
     args.add_argument('ncpus', nargs='?', default=1, 
                         help='number of cpus')
     args = args.parse_args()

@@ -35,6 +35,9 @@ class Detection:
         self.ra = ra
         if self.ra > 180:
             self.ra = ra -360
+        self.erra = 0
+        self.errb = 0
+        self.errpa = 0
         self.dec = dec
         self.mjd = mjd
         self.mag = -2.5*np.log10(flux) + 31.4
@@ -167,6 +170,24 @@ class Triplet:
         self.errs = 0
         self.orbit = 0
         self.chiSq = -1
+    #returns whether two triplets share M detections
+    def shareM(self, other, M):
+        count = 0
+        for det1 in self.dets:
+            for det2 in other.dets:
+                if(det1==det2):
+                    count += 1
+        return count >= M
+                
+    #returns a list of detections that contains detections from both triplets
+    def merge(self, other):
+        temp = self.dets + other.dets
+        return list(set(temp))
+    #adds a detection if not already present
+    def addDetection(self, det):
+        temp = self.dets + [det]
+        self.dets = list(set(temp))
+        
     #converts triplet to a dat format
     def toDat(self, outfile):
         s = self.dets[0].toDat()
@@ -219,6 +240,7 @@ class Triplet:
         orbit = Orbit(dates=datelist, ra=ralist, dec=declist,
             obscode=np.ones(len(self.dets), dtype=int)*807, err=errs)
         self.orbit = orbit
+        self.elements, self.errs = orbit.get_elements()
         return orbit
 
     def getDistance(self):
@@ -254,10 +276,12 @@ class Triplet:
         predPos = orbit.predict_pos(date)
         ra = ephem.hours(predPos['ra'])
         dec = ephem.degrees(predPos['dec'])
-        err = predPos['err']['a']
+        erra = predPos['err']['a']
+        errb = predPos['err']['b']
+        pa = predPos['err']['PA']
         ra = np.degrees(ra)
         dec = np.degrees(dec)
-        return (ra, dec), err
+        return (ra, dec), erra, errb, pa
     #checks if the objects all have the same fakeid    
     def sameFake(triplet):
         id = triplet.dets[0].fakeid
@@ -296,11 +320,15 @@ class Triplet:
         return hash(tuple([x.objid for x in self.dets]))
 
     def __eq__(self, other):
+        if other == None:
+            return False
         selfIDs = tuple([x.objid for x in self.dets]) 
         otherIDs = tuple([x.objid for x in other.dets]) 
         return sorted(selfIDs) == sorted(otherIDs)
 
     def __ne__(self, other):
+        if other == None:
+            return True
         selfIDs = tuple([x.objid for x in self.dets])
         otherIDs = tuple([x.objid for x in other.dets])
         return not (sorted(selfIDs) == sorted(otherIDs))
@@ -314,6 +342,7 @@ class Triplet:
             s += ('Det' + str(x) + ': ' + self.dets[x].toStr() + '\n')
         s+= 'elements: ' + str(self.elements) + '\n'
         s+= 'errs: ' + str(self.errs) + '\n'
+        s+= 'chisq: ' + str(self.chiSq) + '\n'
         return s
 
 #a class for processing detections in the csvfile, organizing them into fakeObjs
@@ -333,10 +362,9 @@ def writeTriplets(tripList, outfile, writeOrbit):
             #printPercentage(count, len(tripList), time.time() - time0)
             if(triplet.elements == 0 and triplet.errs == 0 and writeOrbit == True):
                 elements, errs = triplet.calcOrbit()
-                triplet.getChiSq() 
+            triplet.getChiSq() 
             output.write('triplet ' + str(count) + ': ' + triplet.toStr())
             elements, errs = triplet.elements, triplet.errs
-            output.write('chisq: ' + str(triplet.chiSq) + '\n')
             output.write('*****************\n\n')
             count += 1
     print('\ndone writing')
@@ -353,8 +381,8 @@ def approx(a, b, dist):
     return a-b<=dist and b-a <= dist
 def printPercentage(progress, finish, time):
     percent = float(progress)/float(finish) *100.0
-    sys.stdout.write("\rCompleted: %1f %% after %5f sec" % (percent, time))
-    sys.stdout.flush()
+    sys.stderr.write("\rCompleted: %1f %% after %5f sec" % (percent, time))
+    sys.stderr.flush()
 
 #calculates the distance between two detections in degreees
 def calcDist(det1, det2):
@@ -369,3 +397,12 @@ def isNumber(s):
         return True
     except ValueError:
         return False
+
+def expDictionary(dets):
+    expdict = {}
+    for det in dets:
+        if det.expnum not in expdict:
+            expdict[det.expnum] = [det]
+        else:
+            expdict[det.expnum].append(det)
+    return expdict

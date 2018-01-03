@@ -30,6 +30,9 @@ class resizableArray:
             self.arr[self.ptr] = obj
             self.ptr += 1
 
+    def toList(self):
+        return [x for x in list(self.arr) if x is not None]
+
 
 # This object will be the cells of the array to contain the nlets
 class NLetRegion:
@@ -165,12 +168,6 @@ def combine(arr, numdet, progress=False):
                 if len(potential) == 0:
                     unchanged.append(nlet1)
                 else:
-                    #for samp in potential:
-                    #    samp.sortByMjd()
-                    #toadd = [tuple([x.objid for x in y.dets]) for y in potential]
-                    #if len(toadd) != len(set(toadd)):
-                    #    print(str(len(toadd) - len(set(toadd))) + ' extras')
-                    #combined = combined + potential
                     for pot in potential:
                         combined.append(pot)
                 if progress:
@@ -182,7 +179,68 @@ def combine(arr, numdet, progress=False):
                     # if you want to keep the nlet, uncomment the line below
                     # arr[i,j].inactive.append(nlet1)
                     arr[i,j].nlets.remove(nlet1)
-    return [x for x in list(combined.arr) if x is not None], [y for y in list(unchanged.arr) if y is not None]
+    return combined.toList(), unchanged.toList()
+
+
+def generalCombine(arr, similarity, keep=False, progress=False):
+    """
+    arr - numpy array of NLetRegion
+    similarity - float between 0 and 1
+    keep - set it to True to keep nlets in inactive list of NLetRegion
+    progress - set it to True for showing progress
+    """
+    combined = resizableArray()
+    unchanged = resizableArray()
+
+    minRA = arr[0,0].raLo
+    minDec = arr[0,0].decLo
+    stepRA = arr[0,0].raHi - minRA
+    stepDec = arr[0,0].decHi - minDec
+
+    if progress:
+        count = 0
+        time0 = time.time()
+        uniqueNLets = {}
+        for i in arr:
+            for j in i:
+                for nlet in j:
+                    nlet.sortByMjd()
+                    uniqueNlets[tuple([x.objid for x in nlet.dets])] = nlet
+        size = len(uniqueNlets.values())
+
+    for x in arr:
+        for y in arr:
+            for nlet in y:
+                potential = []
+                objid = set([x.objid for x in nlet.dets])
+                target = int(similarity * len(nlet.dets))
+                othernlets, coord = getSameRegNLet(nlet, arr, minRA, minDec,
+                                                    stepRA, stepDec)
+                for other in othernlets:
+                    otherID = set([x.objid for x in others.dets])
+                    if len(objid.intersection(otherID)) >= target:
+                        detgroup = [x for x in nlet.dets]
+                        potential.append(Triplet(list(set([x for x in other.dets]
+                                                        + detgroup))))
+                
+                if len(potential) != 0:
+                    for pot in potential:
+                        combined.append(pot)
+                else:
+                    unchanged.append(nlet)
+
+                if progress:
+                    count += 1
+                    printPercentage(count, size, time.time() - time0)
+
+                for radec in coord:
+                    i = int((radec[0] - minRA) / stepRA)
+                    j = int((radec[1] - minDec) / stepDec)
+                    if keep:
+                        arr[i,j].inactive.append(nlet)
+                    arr[i,j].nlets.remove(nlet)
+    return combined, unchanged
+
 
 # remove duplicates
 def removeDuplicates(nlets):
@@ -226,96 +284,4 @@ def checkDuplicates(nlets, name):
     objids = [tuple([y.objid for y in x.dets]) for x in nlets]
     print('Number of ' + name + ': ' + str(len(objids)))
     print('Number of unique ' + name + ': ' +  str(len(set(objids))))
-
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('nlets', nargs=1, help='path to nlet pickle file')
-    parser.add_argument('chisq', nargs='?', default = 5,
-                         help='chi-square threshold for orbit fitter')
-    args = parser.parse_args()
-    nlets = pickle.load(open(args.nlets[0], 'rb'))
-    
-    # identify the number of detections in each Triplet object
-    objcount = len(nlets[0].dets)
-
-    t0 = time.time()
-    # First get bounds of season
-    # Get the array of partitioned season
-    # Each cell of the array holds Triplet object with detections that fall in that region
-    # if Triplet object have 5 detections (quint) then it will belong to up to 5 cells
-    # Finally combine function merges nlet to form (n+1)let
-    minRA, maxRA, minDec, maxDec = getBounds(nlets)
-    arr = partition(nlets, minRA, maxRA, minDec, maxDec, 800, 800)
-    nPlusOne, unchanged = combine(arr, objcount)
-    
-    # remove duplicates
-    nPlusOne = removeDuplicates(nPlusOne)
-    unchanged = removeDuplicates(unchanged)
-
-    # remove same exposure
-    nPlusOne = removeSameExposure(nPlusOne)
-    unchanged = removeSameExposure(unchanged)
-
-    # check for good orbits
-    print('Orbit fit test in progress')
-    goodNPlusOne = checkGoodOrbit(nPlusOne,float(args.chisq))
-    goodUnchanged = checkGoodOrbit(unchanged, float(args.chisq))
-
-    t1 = time.time() - t0
-    print('Time taken: ' + str(t1))
-    
-    # dictionary for savename
-    numobj = {3:'triplet', 4: 'quad', 5:'quint', 6:'hex', 7:'sept', 8:'oct'}
-
-    # Now saving (n+1)let
-    names = {3:'goodtriplet', 4:'goodquad', 5:'goodquint', 6:'goodhex',
-             7:'goodsept', 8:'goodoct'}
-    
-    # some calculations to get stats
-    total = len(goodNPlusOne) + len(goodUnchanged)
-    correctUnchanged = [x for x in goodUnchanged if x.sameFake()]
-    correctNPlusOne = [x for x in goodNPlusOne if x.sameFake()]
-    notsame = total - len(correctUnchanged) - len(correctNPlusOne)
-    inputFakeid = list(set([y.fakeid for y in x.dets for x in nlets]))
-    unchangedFakeid = list(set([x.dets[0].fakeid for x in correctUnchanged]))
-    nPlusOneFakeid = list(set([x.dets[0].fakeid for x in correctNPlusOne]))
-
-    '''
-    A fake with fakeid X is considered recoverable if there exists an nlet composed of
-    detections only of fakeid X (i.e. all detections have fakeid X)
-    '''
-
-    print('Number of input ' + numobj[objcount] + ': ' +  str(len(nlets)))
-    print('Number of input fakeids ' + str(len(inputFakeid)))
-    print('Number of good fits remaining: ' + str(total))
-    print('Number of good remaining ' + numobj[objcount] + ': ' + str(len(correctUnchanged)))
-    print('Number of good remaining ' + numobj[objcount + 1] + ': ' +  str(len(correctNPlusOne)))
-    print('Number of recoverable fakes in remaining ' + numobj[objcount] + ': ' + str(len(unchangedFakeid)))
-    print('Number of recoverable fakes in remaining ' + numobj[objcount+1] + ': ' + str(len(nPlusOneFakeid)))
-    print('Number of recoverable fakes remaining: ' + str(len(set(unchangedFakeid + nPlusOneFakeid))))
-    
-    print('\n Checking duplicates:')
-    print('Input:')
-    checkDuplicates(nlets, numobj[objcount])
-    print('Processed:')
-    checkDuplicates(goodNPlusOne, numobj[objcount+1])
-    checkDuplicates(goodUnchanged, numobj[objcount])
-    #print('Number of duplicates in ' + numobj[objcount+1] + ' :' + str(numdup_np1))
-
-
-
-    savename = args.nlets[0].split('+')[-1].split('.')[0]
-    saveas_n1 = names[objcount + 1] + str(args.chisq) + '+' + savename
-    saveas_u = names[objcount] + 'U' + str(args.chisq) + '+' + savename
-    
-    # save unchanged triplet
-    writeTriplets(goodUnchanged, saveas_u + '.txt', False)
-    pickleTriplets(goodUnchanged, saveas_u + '.pickle')
-
-    writeTriplets(goodNPlusOne, saveas_n1 + '.txt', False)
-    pickleTriplets(goodNPlusOne, saveas_n1 + '.pickle')
-    
-
-if __name__ == '__main__':
-    main()
 
