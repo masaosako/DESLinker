@@ -28,6 +28,7 @@ class Region:
         maxbounds = '(maxRa: ' + str(self.raHi) + ', maxDec: ' + str(self.decHi) + ')'
         return minbounds + '  ' + maxbounds 
 
+
 #all the parameters of a detection
 #ra is between -180 and 180
 class Detection:
@@ -37,7 +38,7 @@ class Detection:
             self.ra = ra -360
         self.erra = 0
         self.errb = 0
-        self.errpa = 0
+        self.pa = 0
         self.dec = dec
         self.mjd = mjd
         self.mag = -2.5*np.log10(flux) + 31.4
@@ -229,18 +230,33 @@ class Triplet:
 
     def setOrbit(self):
         mag = max([x.mag for x in self.dets])
+        #time0 = time.time()
         errs=0.1
         if mag <= 21:
             errs = 0.1
         else:
             errs = 0.1 + (mag -21.0) / 10.0
+        #time1 = time.time()
         ralist = [ephem.hours(np.deg2rad(det.ra)) for det in self.dets]
+        #print('ra:' + str(time.time()-time1))
+        #time2 = time.time()
         declist = [ephem.degrees(np.deg2rad(det.dec)) for det in self.dets]
+        #print('dec:' + str(time.time()-time2))
         datelist = [ephem.date((Time(det.mjd,format='mjd')).datetime) for det in self.dets]
+        #time3 = time.time()
+        #print('date:' + str(time3-time2))
+        #time2 = time.time()
         orbit = Orbit(dates=datelist, ra=ralist, dec=declist,
             obscode=np.ones(len(self.dets), dtype=int)*807, err=errs)
         self.orbit = orbit
+        self.chisq = orbit.chisq
+        #time3 = time.time()
         self.elements, self.errs = orbit.get_elements()
+        #time4 = time.time()
+        #print('time0:' + str(time1-time0))
+        #print('dateTime:' + str(time2-time1))
+        #print('orbitTime:' + str(time3-time2))
+        #print('getTime:' + str(time4-time3))
         return orbit
 
     def getDistance(self):

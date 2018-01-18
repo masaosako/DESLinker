@@ -17,12 +17,17 @@ def main():
     args = args.parse_args()
     print('\nloading nlets ' + args.potentialNlets[0])
     nlets = pickle.load(open(args.potentialNlets[0], 'rb'))
-    saveName = args.potentialNlets[0].split('+')[-1].split('.')[0]
-    saveName2 = args.potentialNlets[0].split('+')[-2]
+    nameList = args.potentialNlets[0].split('+')
+    saveName = nameList[-1].split('.')[0]
+    saveName2 = nameList[-2]
     if '/' in saveName2:
         saveName2 = saveName2.split('/')[-1]
     print(saveName2)
-
+    saveName3 = ''
+    if(len(nameList)>=3):
+        saveName3 = nameList[-3]
+    if '/' in saveName3:
+        saveName3 = saveName3.split('/')[-1]
     print('\nwrapping detections: ' + args.detList[0])
     detList = wrapDets(args.detList[0])
     print('\nmaking dictionary')
@@ -40,7 +45,7 @@ def main():
         print('\nNEW TRIPLET:')
         print(newLet.toStr())
         newNletList.append(newLet)
-    name = 'crossCampaignTriplets+' + saveName2 + '+' + saveName
+    name = 'crossCampaignTriplets+' + saveName3 + '+' + saveName2 + '+' + saveName
     writeTriplets(newNletList, name + '.txt', True)
     pickleTriplets(newNletList,name + '.pickle')
     

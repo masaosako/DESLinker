@@ -16,10 +16,11 @@ import argparse
 
 def withinEllipse(det, predDet):
     # The ellipse
+    arcSecToDegree = 0.000277778
     g_ell_center = (predDet.ra, predDet.dec)
-    g_ell_width = 2*predDet.erra
-    g_ell_height = 2*predDet.errb
-    angle = predDet.errpa
+    g_ell_width = 2*predDet.erra*arcSecToDegree
+    g_ell_height = 2*predDet.errb*arcSecToDegree
+    angle = predDet.pa
     
     g_ellipse = patches.Ellipse(g_ell_center, g_ell_width, 
                         g_ell_height, angle=angle, fill=False, 
@@ -42,51 +43,162 @@ def withinEllipse(det, predDet):
 #checks whetehr a single detecitons should be added
 def checkDetection(nlet, predDet, newdet, chiThresh):
     debugCounter = 0
-    if(withinEllipse(newdet, predDet)):
+    timeWrap = 0
+    timeChiSq = 0
+    timeA = time.time()
+    inEllipse = withinEllipse(newdet, predDet)
+    timeB = time.time()
+    if(inEllipse):
+        print('\nra:' + str(predDet.ra) + ' dec:' + str(predDet.dec))
+        print('erra:' + str(predDet.erra) + ' errb:'+ str(predDet.errb) + ' pa:' + str(predDet.pa))
+        print(newdet.toStr())
         debugCounter += 1
         newTrip = Triplet(nlet.dets[:])
         newTrip.addDetection(newdet)
+        timeB = time.time()
         chisq = newTrip.getChiSq()
         oldsize = len(nlet.dets)
         newsize = len(newTrip.dets)
+        ##
+        timeC = time.time()
+        timeWrap = timeB-timeA
+        timeChiSq = timeC-timeB
+        #print('timewrap' + str(timeWrap))
+        #print('timechisq' + str(timeChiSq))
         if(chisq < chiThresh and newTrip.elements['a'] > 2
            and newsize > oldsize):
             print('\nfound new detection')
             print(newdet.toStr())
             print(newTrip.toStr())
-            return newTrip, debugCounter
-    return nlet, debugCounter
+            return newTrip, debugCounter, (timeWrap, timeChiSq)
+    timeWrap = timeB - timeA
+    return nlet, debugCounter, (timeWrap, timeChiSq)
+
+def dontworryaboutwhatthisdoes(dictionaryThing):
+    for x in dictionaryThing:
+        print(x[0])
 
 #adds every possible detection to the nlet
 def addToNlet(nlet, expDict):
+    time1 = time.time()
+    expLst = sorted([x.expnum for x in nlet.dets])
+    ####
+    time2 = time.time()
+    firstExp = expLst[len(expLst)/2]
+    lastExp = firstExp
+    print('first exp: ' + str(firstExp) + ' last exp: ' + str(lastExp))
     chiThresh = 100
     counter = 0
-    time0 = time.time()
+    ####
     size = len(expDict)
     print('number of exposures to check: ' + str(size))
+   
     tempLet = Triplet(nlet.dets)
+    
+    #only look at exposures after last and before first
+    time4 = time.time()
+    sortedDict = sorted(expDict.iteritems())
+    greater = [x for x in sortedDict if x[0]>lastExp]
+    lesser = [x for x in sortedDict if x[0]<firstExp]
+    lesser.reverse()
+    time0 = time.time()
+    #dontworryaboutwhatthisdoes(greater)
+    #dontworryaboutwhatthisdoes(lesser)
+    timeList = time2-time1
+    timeInit = time4-time2
+    timeSort = time0-time4
+    timePrint = 0
+    timePred = 0
+    timeWrap = 0
+    timeCheck = 0
+    timeCheckWrap = 0
+    timeCheckChi = 0
+    totalCount = 0
     #checking every exposure
-    for key, value in sorted(expDict.iteritems()):
+    for key, value in greater:
         counter += 1
-        print('\nchecking exposure ' + str(key) + 
-            ' with ' + str(len(value)) + ' items')
-        printPercentage(counter, size, time.time()-time0)
+        timeA = time.time()
+        print '\nchecking exposure ' + str(key) + ' with ' + str(len(value)) + ' items', 
+        ###    
+        
+        #printPercentage(counter, size, time.time()-time0)
+        ###
+        timeB = time.time()
         mjd = value[0].mjd
         coord, erra, errb, pa = tempLet.predictPos(mjd)
+        #print('pa' + str(pa))
+        ###
+        timeC = time.time()
         det = Detection(coord[0], coord[1], mjd, 1, 0, key, 0, 0, 0, 0) 
         det.erra = erra
         det.errb = errb
         det.pa = pa
+        print 'erra: ' + str(erra) + ' errb: ' + str(errb),
+        ###
+        timeD = time.time()
         #checks every detection in the exposure
         debugCounter = 0 
         for pdet in value:
-            tempLet, debugCount = checkDetection(tempLet, det, pdet, chiThresh)
+            tempLet, debugCount, (timeF, timeG) = checkDetection(
+                    tempLet, det, pdet, chiThresh)
             debugCounter += debugCount
-        print('found ' + str(debugCounter) + ' within error ellipse')
+            timeCheckWrap += timeF
+            timeCheckChi += timeG
+        timeE = time.time()
+        print 'found ' + str(debugCounter) + ' within error ellipse',
+        totalCount += debugCounter
+        timePrint += timeB-timeA
+        timePred += timeC-timeB
+        timeWrap += timeD-timeC
+        timeCheck += timeE-timeD
+    
+    for key, value in lesser:
+        counter += 1
+        timeA = time.time()
+        print '\nchecking exposure ' + str(key) + ' with ' + str(len(value)) + ' items',
+        #printPercentage(counter, size, time.time()-time0)
+        ##
+        timeB = time.time()
+        mjd = value[0].mjd
+        coord, erra, errb, pa = tempLet.predictPos(mjd)
+        timeC = time.time()
+        det = Detection(coord[0], coord[1], mjd, 1, 0, key, 0, 0, 0, 0) 
+        det.erra = erra
+        det.errb = errb
+        det.pa = pa
+        print 'erra: ' + str(erra) + ' errb: ' + str(errb),
+
+        ##
+        timeD = time.time()
+        #checks every detection in the exposure
+        debugCounter = 0 
+        for pdet in value:
+            tempLet, debugCount, (timeF, timeG) = checkDetection(
+                tempLet, det, pdet, chiThresh)
+            debugCounter += debugCount
+            timeCheckWrap += timeF
+            timeCheckChi += timeG
+        totalCount +=debugCounter
+        timeE = time.time()
+        print 'found ' + str(debugCounter) + ' within error ellipse',
+        timePrint += timeB-timeA
+        timePred += timeC-timeB
+        timeWrap += timeD-timeC
+        timeCheck += timeE-timeD
+    print('timeList: ' + str(timeList))
+    print('timeInit: ' + str(timeInit))
+    print('timeSort: ' + str(timeSort))
+    print('timePrint: ' + str(timePrint))
+    print('timePred: ' + str(timePred))
+    print('timeWrap: ' + str(timeWrap))
+    print('timeCheck: ' + str(timeCheck))
+    print('timeCheckWrap: ' + str(timeCheckWrap))
+    print('timeCheckChi: ' + str(timeCheckChi))
+    print('total detections checked: ' + str(totalCount))
     return tempLet        
 
 def addDetections(triplet, predList, expDict):
-    chiThresh = 100
+    chiThresh = 10
     counter = 0
     time0 = time.time()
     print('number of predictions to check: ' + str(len(predList)))
